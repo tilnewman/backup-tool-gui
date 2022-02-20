@@ -19,6 +19,20 @@ namespace backup
 
         void run();
 
+        const TaskQueueStatus directoryCompareTaskerStatus() const
+        {
+            return m_dirCompareTasker.status();
+        }
+
+        const TaskQueueStatus fileCompareTaskerStatus() const
+        {
+            return m_fileCompareTasker.status();
+        }
+
+        const TaskQueueStatus copyTaskerStatus() const { return m_copyTasker.status(); }
+
+        const TaskQueueStatus removeTaskerStatus() const { return m_removeTasker.status(); }
+
       private:
         void printFinalResults(const bool didAbortEarly);
         void startAndWaitForAllThreadsToFinish();

@@ -1,3 +1,6 @@
+#include "backup-tool.hpp"
+
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -25,6 +28,10 @@ namespace backup_gui
         Status status    = Status::Wait;
         bool is_running  = false;
         bool is_quitting = false;
+        backup::TaskQueueStatus fileStatus;
+        backup::TaskQueueStatus dirStatus;
+        backup::TaskQueueStatus copyStatus;
+        backup::TaskQueueStatus removeStatus;
 
         // job states
         int job = Job::Compare;
@@ -40,12 +47,18 @@ namespace backup_gui
         bool opt_ignore_unknown  = false;
         bool opt_ignore_warnings = false;
 
-        std::vector<std::string> output;
+        // job workers
+        std::unique_ptr<backup::BackupTool> m_toolUPtr;
 
-        void work();
-        bool workOnce();
+        void backupLoop();
+        bool backupOnce();
+
+        void updateLoop();
+        void updateOnce();
     };
 
     void setupGUI(Task & task);
+    void setupOptionsWindow(Task & task);
+    void setupOutputWindow(Task & task);
 
 } // namespace backup_gui

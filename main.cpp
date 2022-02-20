@@ -104,7 +104,8 @@ int main(int, char **)
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     backup_gui::Task task;
-    auto future = std::async(std::launch::async, &backup_gui::Task::work, &task);
+    auto backupFuture = std::async(std::launch::async, &backup_gui::Task::backupLoop, &task);
+    auto updateFuture = std::async(std::launch::async, &backup_gui::Task::updateLoop, &task);
 
     // Main loop
     while (!glfwWindowShouldClose(window))
@@ -151,7 +152,8 @@ int main(int, char **)
         task.is_quitting = true;
     }
 
-    future.wait();
+    updateFuture.wait();
+    backupFuture.wait();
 
     // Cleanup
     ImGui_ImplOpenGL3_Shutdown();
