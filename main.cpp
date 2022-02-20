@@ -4,6 +4,7 @@
 
 #include "gui.hpp"
 
+#include <future>
 #include <stdio.h>
 
 #if defined(IMGUI_IMPL_OPENGL_ES2)
@@ -102,7 +103,8 @@ int main(int, char **)
 
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-    backup_gui::State state;
+    backup_gui::Task task;
+    auto future = std::async(std::launch::async, &backup_gui::Task::work, &task);
 
     // Main loop
     while (!glfwWindowShouldClose(window))
@@ -114,7 +116,7 @@ int main(int, char **)
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        backup_gui::setupGUI(state);
+        backup_gui::setupGUI(task);
 
         // Rendering
         ImGui::Render();
@@ -143,6 +145,13 @@ int main(int, char **)
 
         glfwSwapBuffers(window);
     }
+
+    {
+        std::scoped_lock lock(task.mutex);
+        task.is_quitting = true;
+    }
+
+    future.wait();
 
     // Cleanup
     ImGui_ImplOpenGL3_Shutdown();
