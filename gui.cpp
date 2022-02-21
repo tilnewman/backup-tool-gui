@@ -10,23 +10,20 @@ namespace backup_gui
 {
     void setupGUI(Task & task)
     {
-        // Enable docking
         ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
-
         setupOptionsWindow(task);
         setupOutputWindow(task);
     }
 
     void setupOptionsWindow(Task & task)
     {
+        std::scoped_lock lock(task.mutex);
+
         ImGui::Begin("Options");
 
+        if (task.is_running)
         {
-            std::scoped_lock lock(task.mutex);
-            if (task.is_running)
-            {
-                ImGui::BeginDisabled();
-            }
+            ImGui::BeginDisabled();
         }
 
         ImGui::RadioButton("Compare", &task.job, Job::Compare);
@@ -48,39 +45,32 @@ namespace backup_gui
         ImGui::Checkbox("Ignore Unknown", &task.opt_ignore_unknown);
         ImGui::Checkbox("Ignore Warnings", &task.opt_ignore_warnings);
 
-        bool wasButtonClicked = false;
+        const bool wasButtonClicked = ImGui::Button("Execute", ImVec2(600.0f, 50.0f));
+
+        if (task.is_running)
         {
-            std::scoped_lock lock(task.mutex);
-            wasButtonClicked = ImGui::Button("Execute");
-
-            if (task.is_running)
-            {
-                ImGui::EndDisabled();
-            }
-
-            if (wasButtonClicked && !task.is_running)
-            {
-                task.is_running = true;
-            }
+            ImGui::EndDisabled();
         }
 
+        if (wasButtonClicked && !task.is_running)
         {
-            std::scoped_lock lock(task.mutex);
-            ImGui::Text("Status:  ");
-            ImGui::SameLine();
+            task.is_running = true;
+        }
 
-            if (task.status == Status::Quit)
-            {
-                ImGui::TextColored(ImVec4(1, 0, 0, 1), "Quitting");
-            }
-            else if (task.status == Status::Work)
-            {
-                ImGui::TextColored(ImVec4(1, 1, 0, 1), "Working");
-            }
-            else
-            {
-                ImGui::TextColored(ImVec4(1, 1, 1, 1), "Waiting");
-            }
+        ImGui::Text("Status:  ");
+        ImGui::SameLine();
+
+        if (task.status == Status::Quit)
+        {
+            ImGui::TextColored(ImVec4(1, 0, 0, 1), "Quitting");
+        }
+        else if (task.status == Status::Work)
+        {
+            ImGui::TextColored(ImVec4(1, 1, 0, 1), "Working");
+        }
+        else
+        {
+            ImGui::TextColored(ImVec4(1, 1, 1, 1), "Waiting");
         }
 
         ImGui::End();
@@ -89,119 +79,37 @@ namespace backup_gui
     void setupOutputWindow(Task & task)
     {
         ImGui::Begin("Output");
-
-        //
-        ImGui::Text("Directory Comparer");
-        ImGui::Indent();
-
-        ImGui::Text(
-            "Queued/Completed: %d/%d",
-            task.dir_status.stats.queue_size,
-            task.dir_status.stats.completed_count);
-
-        ImGui::Text(
-            "Threads/Busy: %d/%d",
-            task.dir_status.stats.resource_count,
-            task.dir_status.stats.resource_busy_count);
-
-        ImGui::PlotLines(
-            "",
-            &task.dir_status.unit_vec[0],
-            static_cast<int>(task.dir_status.unit_vec.size()),
-            0,
-            NULL,
-            0.0f,
-            1.0f,
-            ImVec2(600.0f, 80.0f));
-
-        ImGui::Unindent();
-        ImGui::Dummy(ImVec2(0.0f, 20.0f));
-
-        //
-        ImGui::Text("File Comparer");
-        ImGui::Indent();
-
-        ImGui::Text(
-            "Queued/Completed: %d/%d",
-            task.file_status.stats.queue_size,
-            task.file_status.stats.completed_count);
-
-        ImGui::Text(
-            "Threads/Busy: %d/%d",
-            task.file_status.stats.resource_count,
-            task.file_status.stats.resource_busy_count);
-
-        ImGui::PlotLines(
-            "",
-            &task.file_status.unit_vec[0],
-            static_cast<int>(task.file_status.unit_vec.size()),
-            0,
-            NULL,
-            0.0f,
-            1.0f,
-            ImVec2(600.0f, 80.0f));
-
-        // ImGui::Text("Progress: %d", task.file_status.stats.progress_sum);
-        ImGui::Unindent();
-        ImGui::Dummy(ImVec2(0.0f, 20.0f));
-
-        //
-        ImGui::Text("File Copier");
-        ImGui::Indent();
-
-        ImGui::Text(
-            "Queued/Completed: %d/%d",
-            task.copy_status.stats.queue_size,
-            task.copy_status.stats.completed_count);
-
-        ImGui::Text(
-            "Threads/Busy: %d/%d",
-            task.copy_status.stats.resource_count,
-            task.copy_status.stats.resource_busy_count);
-
-        ImGui::PlotLines(
-            "",
-            &task.copy_status.unit_vec[0],
-            static_cast<int>(task.copy_status.unit_vec.size()),
-            0,
-            NULL,
-            0.0f,
-            1.0f,
-            ImVec2(600.0f, 80.0f));
-
-        // ImGui::Text("Progress: %d", task.copy_status.stats.progress_sum);
-        ImGui::Unindent();
-        ImGui::Dummy(ImVec2(0.0f, 20.0f));
-
-        //
-        ImGui::Text("File Deleter");
-        ImGui::Indent();
-
-        ImGui::Text(
-            "Queued/Completed: %d/%d",
-            task.remove_status.stats.queue_size,
-            task.remove_status.stats.completed_count);
-
-        ImGui::Text(
-            "Threads/Busy: %d/%d",
-            task.remove_status.stats.resource_count,
-            task.remove_status.stats.resource_busy_count);
-
-        ImGui::PlotLines(
-            "",
-            &task.remove_status.unit_vec[0],
-            static_cast<int>(task.remove_status.unit_vec.size()),
-            0,
-            NULL,
-            0.0f,
-            1.0f,
-            ImVec2(600.0f, 80.0f));
-
-        // ImGui::Text("Progress: %d", task.remove_status.stats.progress_sum);
-        ImGui::Unindent();
-        ImGui::Dummy(ImVec2(0.0f, 20.0f));
-
+        setupStatusBlock(task, "File Deleter", task.dir_status);
+        setupStatusBlock(task, "File Comparer", task.file_status);
+        setupStatusBlock(task, "File Copier", task.copy_status);
+        setupStatusBlock(task, "File Deleter", task.remove_status);
         ImGui::End();
+    }
+
+    void setupStatusBlock(Task & task, const std::string & title, const TaskStatus & status)
+    {
+        std::scoped_lock lock(task.mutex);
+        ImGui::Text("%s", title.data(), title.size());
+        ImGui::Indent();
+
+        ImGui::Text(
+            "Queued/Completed: %d/%d", status.stats.queue_size, status.stats.completed_count);
+
+        ImGui::Text(
+            "Threads/Busy: %d/%d", status.stats.resource_count, status.stats.resource_busy_count);
+
+        ImGui::PlotLines(
+            "",
+            &status.unit_vec[0],
+            static_cast<int>(status.unit_vec.size()),
+            0,
+            NULL,
+            0.0f,
+            1.0f,
+            ImVec2(600.0f, 80.0f));
+
+        ImGui::Unindent();
+        ImGui::Dummy(ImVec2(0.0f, 20.0f));
     }
 
     void Task::backupLoop()
@@ -241,61 +149,74 @@ namespace backup_gui
                 }
             }
 
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
 
         // collect options & backup
         std::vector<std::string> commandLineArgs;
+        commandLineArgs.push_back(src_dir);
+        commandLineArgs.push_back(dst_dir);
+
+        if (Job::Copy == job)
+        {
+            commandLineArgs.push_back("--copy");
+        }
+        else if (Job::Cull == job)
+        {
+            commandLineArgs.push_back("--cull");
+        }
+        else
+        {
+            commandLineArgs.push_back("--compare");
+        }
+
+        if (opt_dryrun)
+        {
+            commandLineArgs.push_back("--dry-run");
+        }
+
+        if (opt_background)
+        {
+            commandLineArgs.push_back("--background");
+        }
+
+        if (opt_skipread)
+        {
+            commandLineArgs.push_back("--skip-file-read");
+        }
+
+        if (opt_relative)
+        {
+            commandLineArgs.push_back("--relative");
+        }
+
+        if (opt_verbose)
+        {
+            commandLineArgs.push_back("--verbose");
+        }
+
+        if (opt_ignore_extra)
+        {
+            commandLineArgs.push_back("--ignore-extra");
+        }
+
+        if (opt_ignore_access)
+        {
+            commandLineArgs.push_back("--ignore-access");
+        }
+
+        if (opt_ignore_unknown)
+        {
+            commandLineArgs.push_back("--ignore-unknown");
+        }
+
+        if (opt_ignore_warnings)
+        {
+            commandLineArgs.push_back("--ignore-warnings");
+        }
+
         {
             std::scoped_lock lock(mutex);
-            commandLineArgs.push_back(src_dir);
-            commandLineArgs.push_back(dst_dir);
-
-            if (opt_dryrun)
-            {
-                commandLineArgs.push_back("--dry-run");
-            }
-
-            if (opt_background)
-            {
-                commandLineArgs.push_back("--background");
-            }
-
-            if (opt_skipread)
-            {
-                commandLineArgs.push_back("--skip-file-read");
-            }
-
-            if (opt_relative)
-            {
-                commandLineArgs.push_back("--relative");
-            }
-
-            if (opt_verbose)
-            {
-                commandLineArgs.push_back("--verbose");
-            }
-
-            if (opt_ignore_extra)
-            {
-                commandLineArgs.push_back("--ignore-extra");
-            }
-
-            if (opt_ignore_access)
-            {
-                commandLineArgs.push_back("--ignore-access");
-            }
-
-            if (opt_ignore_unknown)
-            {
-                commandLineArgs.push_back("--ignore-unknown");
-            }
-
-            if (opt_ignore_warnings)
-            {
-                commandLineArgs.push_back("--ignore-warnings");
-            }
-
             m_toolUPtr = std::make_unique<backup::BackupTool>(commandLineArgs);
         }
 
@@ -337,7 +258,7 @@ namespace backup_gui
                 remove_status.updateVectors();
             }
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
 

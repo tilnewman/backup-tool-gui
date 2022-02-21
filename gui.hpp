@@ -69,5 +69,5 @@ namespace backup_gui
     void setupGUI(Task & task);
     void setupOptionsWindow(Task & task);
     void setupOutputWindow(Task & task);
-
+    void setupStatusBlock(Task & task, const std::string & title, const TaskStatus & status);
 } // namespace backup_gui
