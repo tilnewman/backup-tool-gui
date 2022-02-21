@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include "imgui_stdlib.h"
 
+#include <algorithm>
 #include <chrono>
 
 namespace backup_gui
@@ -34,8 +35,8 @@ namespace backup_gui
         ImGui::SameLine();
         ImGui::RadioButton("Cull", &task.job, Job::Cull);
 
-        ImGui::InputText("SourceDir", &task.srcDir);
-        ImGui::InputText("DestDir", &task.dstDir);
+        ImGui::InputText("SourceDir", &task.src_dir);
+        ImGui::InputText("DestDir", &task.dst_dir);
 
         ImGui::Checkbox("Dry Run", &task.opt_dryrun);
         ImGui::Checkbox("Single Thread", &task.opt_background);
@@ -92,64 +93,112 @@ namespace backup_gui
         //
         ImGui::Text("Directory Comparer");
         ImGui::Indent();
-        ImGui::Text("Queued: %d", task.dirStatus.queue_size);
+
+        ImGui::Text(
+            "Queued/Completed: %d/%d",
+            task.dir_status.stats.queue_size,
+            task.dir_status.stats.completed_count);
 
         ImGui::Text(
             "Threads/Busy: %d/%d",
-            task.dirStatus.resource_count,
-            task.dirStatus.resource_busy_count);
+            task.dir_status.stats.resource_count,
+            task.dir_status.stats.resource_busy_count);
 
-        ImGui::Text("Completed: %d", task.dirStatus.completed_count);
+        ImGui::PlotLines(
+            "",
+            &task.dir_status.unit_vec[0],
+            static_cast<int>(task.dir_status.unit_vec.size()),
+            0,
+            NULL,
+            0.0f,
+            1.0f,
+            ImVec2(600.0f, 80.0f));
+
         ImGui::Unindent();
-
         ImGui::Dummy(ImVec2(0.0f, 20.0f));
 
         //
         ImGui::Text("File Comparer");
         ImGui::Indent();
-        ImGui::Text("Queued: %d", task.fileStatus.queue_size);
+
+        ImGui::Text(
+            "Queued/Completed: %d/%d",
+            task.file_status.stats.queue_size,
+            task.file_status.stats.completed_count);
 
         ImGui::Text(
             "Threads/Busy: %d/%d",
-            task.fileStatus.resource_count,
-            task.fileStatus.resource_busy_count);
+            task.file_status.stats.resource_count,
+            task.file_status.stats.resource_busy_count);
 
-        ImGui::Text("Completed: %d", task.fileStatus.completed_count);
-        ImGui::Text("Progress: %d", task.fileStatus.progress_sum);
+        ImGui::PlotLines(
+            "",
+            &task.file_status.unit_vec[0],
+            static_cast<int>(task.file_status.unit_vec.size()),
+            0,
+            NULL,
+            0.0f,
+            1.0f,
+            ImVec2(600.0f, 80.0f));
+
+        // ImGui::Text("Progress: %d", task.file_status.stats.progress_sum);
         ImGui::Unindent();
-
         ImGui::Dummy(ImVec2(0.0f, 20.0f));
 
         //
         ImGui::Text("File Copier");
         ImGui::Indent();
-        ImGui::Text("Queued: %d", task.copyStatus.queue_size);
+
+        ImGui::Text(
+            "Queued/Completed: %d/%d",
+            task.copy_status.stats.queue_size,
+            task.copy_status.stats.completed_count);
 
         ImGui::Text(
             "Threads/Busy: %d/%d",
-            task.copyStatus.resource_count,
-            task.copyStatus.resource_busy_count);
+            task.copy_status.stats.resource_count,
+            task.copy_status.stats.resource_busy_count);
 
-        ImGui::Text("Completed: %d", task.copyStatus.completed_count);
-        ImGui::Text("Progress: %d", task.copyStatus.progress_sum);
+        ImGui::PlotLines(
+            "",
+            &task.copy_status.unit_vec[0],
+            static_cast<int>(task.copy_status.unit_vec.size()),
+            0,
+            NULL,
+            0.0f,
+            1.0f,
+            ImVec2(600.0f, 80.0f));
+
+        // ImGui::Text("Progress: %d", task.copy_status.stats.progress_sum);
         ImGui::Unindent();
-
         ImGui::Dummy(ImVec2(0.0f, 20.0f));
 
         //
         ImGui::Text("File Deleter");
         ImGui::Indent();
-        ImGui::Text("Queued: %d", task.removeStatus.queue_size);
+
+        ImGui::Text(
+            "Queued/Completed: %d/%d",
+            task.remove_status.stats.queue_size,
+            task.remove_status.stats.completed_count);
 
         ImGui::Text(
             "Threads/Busy: %d/%d",
-            task.removeStatus.resource_count,
-            task.removeStatus.resource_busy_count);
+            task.remove_status.stats.resource_count,
+            task.remove_status.stats.resource_busy_count);
 
-        ImGui::Text("Completed: %d", task.removeStatus.completed_count);
-        ImGui::Text("Progress: %d", task.removeStatus.progress_sum);
+        ImGui::PlotLines(
+            "",
+            &task.remove_status.unit_vec[0],
+            static_cast<int>(task.remove_status.unit_vec.size()),
+            0,
+            NULL,
+            0.0f,
+            1.0f,
+            ImVec2(600.0f, 80.0f));
+
+        // ImGui::Text("Progress: %d", task.remove_status.stats.progress_sum);
         ImGui::Unindent();
-
         ImGui::Dummy(ImVec2(0.0f, 20.0f));
 
         ImGui::End();
@@ -184,6 +233,10 @@ namespace backup_gui
                 else if (is_running)
                 {
                     status = Status::Work;
+                    file_status.reset();
+                    dir_status.reset();
+                    copy_status.reset();
+                    remove_status.reset();
                     break;
                 }
             }
@@ -191,12 +244,12 @@ namespace backup_gui
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
 
-        // collect options
+        // collect options & backup
         std::vector<std::string> commandLineArgs;
         {
             std::scoped_lock lock(mutex);
-            commandLineArgs.push_back(srcDir);
-            commandLineArgs.push_back(dstDir);
+            commandLineArgs.push_back(src_dir);
+            commandLineArgs.push_back(dst_dir);
 
             if (opt_dryrun)
             {
@@ -242,11 +295,7 @@ namespace backup_gui
             {
                 commandLineArgs.push_back("--ignore-warnings");
             }
-        }
 
-        // backup
-        {
-            std::scoped_lock lock(mutex);
             m_toolUPtr = std::make_unique<backup::BackupTool>(commandLineArgs);
         }
 
@@ -269,21 +318,52 @@ namespace backup_gui
 
                 if (is_running && m_toolUPtr.get())
                 {
-                    fileStatus   = m_toolUPtr->fileCompareTaskerStatus();
-                    dirStatus    = m_toolUPtr->directoryCompareTaskerStatus();
-                    copyStatus   = m_toolUPtr->copyTaskerStatus();
-                    removeStatus = m_toolUPtr->removeTaskerStatus();
+                    file_status.stats   = m_toolUPtr->fileCompareTaskerStatus();
+                    dir_status.stats    = m_toolUPtr->directoryCompareTaskerStatus();
+                    copy_status.stats   = m_toolUPtr->copyTaskerStatus();
+                    remove_status.stats = m_toolUPtr->removeTaskerStatus();
                 }
                 else
                 {
-                    fileStatus   = backup::TaskQueueStatus();
-                    dirStatus    = backup::TaskQueueStatus();
-                    copyStatus   = backup::TaskQueueStatus();
-                    removeStatus = backup::TaskQueueStatus();
+                    file_status.stats   = backup::TaskQueueStatus();
+                    dir_status.stats    = backup::TaskQueueStatus();
+                    copy_status.stats   = backup::TaskQueueStatus();
+                    remove_status.stats = backup::TaskQueueStatus();
                 }
+
+                file_status.updateVectors();
+                dir_status.updateVectors();
+                copy_status.updateVectors();
+                remove_status.updateVectors();
             }
 
             std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        }
+    }
+
+    void TaskStatus::reset()
+    {
+        stats = backup::TaskQueueStatus();
+        unit_vec.clear();
+        value_vec.clear();
+    }
+
+    void TaskStatus::updateVectors()
+    {
+        if (stats.isDone())
+        {
+            return;
+        }
+
+        unit_vec.clear();
+
+        value_vec.push_back(stats.queue_size);
+
+        const std::size_t max = *std::max_element(std::begin(value_vec), std::end(value_vec));
+
+        for (const std::size_t value : value_vec)
+        {
+            unit_vec.push_back(static_cast<float>(value) / static_cast<float>(max));
         }
     }
 

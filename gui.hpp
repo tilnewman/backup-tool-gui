@@ -21,6 +21,16 @@ namespace backup_gui
         Cull
     };
 
+    struct TaskStatus
+    {
+        backup::TaskQueueStatus stats;
+        std::vector<float> unit_vec;
+        std::vector<std::size_t> value_vec;
+
+        void reset();
+        void updateVectors();
+    };
+
     struct Task
     {
         // task states
@@ -28,15 +38,15 @@ namespace backup_gui
         Status status    = Status::Wait;
         bool is_running  = false;
         bool is_quitting = false;
-        backup::TaskQueueStatus fileStatus;
-        backup::TaskQueueStatus dirStatus;
-        backup::TaskQueueStatus copyStatus;
-        backup::TaskQueueStatus removeStatus;
+        TaskStatus file_status;
+        TaskStatus dir_status;
+        TaskStatus copy_status;
+        TaskStatus remove_status;
 
         // job states
         int job = Job::Compare;
-        std::string srcDir;
-        std::string dstDir;
+        std::string src_dir;
+        std::string dst_dir;
         bool opt_dryrun          = false;
         bool opt_background      = false;
         bool opt_skipread        = false;
@@ -54,7 +64,6 @@ namespace backup_gui
         bool backupOnce();
 
         void updateLoop();
-        void updateOnce();
     };
 
     void setupGUI(Task & task);
