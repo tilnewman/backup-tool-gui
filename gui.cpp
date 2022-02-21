@@ -59,6 +59,9 @@ namespace backup_gui
         ImGui::Checkbox("Skip File Content Compare", &task.opt_skipread);
         HelpMarker("Files with the exact same size are assumed to have the same contents");
 
+        ImGui::Checkbox("Relative Paths", &task.opt_relative);
+        HelpMarker("Displays relative paths instead of absolute paths");
+
         ImGui::Checkbox("Verbose", &task.opt_verbose);
         HelpMarker("Shows extra info. (i.e. warns on symlinks/shortcuts/weird stuff)");
 
@@ -99,7 +102,7 @@ namespace backup_gui
         }
         else
         {
-            ImGui::TextColored(ImVec4(1, 1, 1, 1), "Waiting");
+            ImGui::TextColored(ImVec4(0, 1, 0, 1), "Ready");
         }
 
         ImGui::End();
@@ -210,6 +213,11 @@ namespace backup_gui
         if (opt_skipread)
         {
             commandLineArgs.push_back("--skip-file-read");
+        }
+
+        if (opt_relative)
+        {
+            commandLineArgs.push_back("--show-relative");
         }
 
         if (opt_verbose)

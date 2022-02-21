@@ -50,6 +50,7 @@ namespace backup_gui
         bool opt_dryrun          = false;
         bool opt_background      = false;
         bool opt_skipread        = false;
+        bool opt_relative        = false;
         bool opt_verbose         = false;
         bool opt_ignore_extra    = false;
         bool opt_ignore_access   = false;

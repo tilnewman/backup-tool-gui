@@ -50,7 +50,7 @@ namespace backup
     ss << L"    --dry-run         A safe mode that does nothing except show what WOULD have been done.\n";
     ss << L"    --background      Runs minimal threads to prevent slowing your computer down.\n";
     ss << L"    --skip-file-read  Files with the exact same size are assumed to have the same contents.\n";
-    ss << L"    --relative        Displays relative paths instead of absolute paths.\n";
+    ss << L"    --show-relative   Displays relative paths instead of absolute paths.\n";
     ss << L"    --verbose         Shows extra info. (i.e. warns on symlinks/shortcuts/weird stuff).\n";
     ss << L"    --quiet           Shows only errors and the final result.\n";
     ss << L"    -\n";
