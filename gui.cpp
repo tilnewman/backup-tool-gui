@@ -8,6 +8,21 @@
 
 namespace backup_gui
 {
+
+    static void HelpMarker(const char * desc)
+    {
+        ImGui::SameLine();
+        ImGui::TextDisabled("(?)");
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::BeginTooltip();
+            ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+            ImGui::TextUnformatted(desc);
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
+        }
+    }
+
     void setupGUI(Task & task)
     {
         ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
@@ -36,14 +51,28 @@ namespace backup_gui
         ImGui::InputText("DestDir", &task.dst_dir);
 
         ImGui::Checkbox("Dry Run", &task.opt_dryrun);
+        HelpMarker("A safe mode that does nothing except show what WOULD have been done");
+
         ImGui::Checkbox("Single Thread", &task.opt_background);
-        ImGui::Checkbox("Skip Read", &task.opt_skipread);
-        ImGui::Checkbox("Relative", &task.opt_relative);
+        HelpMarker("Runs minimal threads to prevent slowing your computer down");
+
+        ImGui::Checkbox("Skip File Content Compare", &task.opt_skipread);
+        HelpMarker("Files with the exact same size are assumed to have the same contents");
+
         ImGui::Checkbox("Verbose", &task.opt_verbose);
+        HelpMarker("Shows extra info. (i.e. warns on symlinks/shortcuts/weird stuff)");
+
         ImGui::Checkbox("Ignore Extra", &task.opt_ignore_extra);
+        HelpMarker("Any extra files or dirs in your dst dir are not shown");
+
         ImGui::Checkbox("Ignore Access", &task.opt_ignore_access);
+        HelpMarker("Errors caused by access/permissions/authentication problems are not shown");
+
         ImGui::Checkbox("Ignore Unknown", &task.opt_ignore_unknown);
+        HelpMarker("Errors caused by files or dirs with unknown types are not shown");
+
         ImGui::Checkbox("Ignore Warnings", &task.opt_ignore_warnings);
+        HelpMarker("Warnings about unusual counts or possible errors are not shown");
 
         const bool wasButtonClicked = ImGui::Button("Execute", ImVec2(600.0f, 50.0f));
 
@@ -93,10 +122,10 @@ namespace backup_gui
         ImGui::Indent();
 
         ImGui::Text(
-            "Queued/Completed: %d/%d", status.stats.queue_size, status.stats.completed_count);
+            "Threads/Busy: %d/%d", status.stats.resource_count, status.stats.resource_busy_count);
 
         ImGui::Text(
-            "Threads/Busy: %d/%d", status.stats.resource_count, status.stats.resource_busy_count);
+            "Queued/Completed: %d/%d", status.stats.queue_size, status.stats.completed_count);
 
         ImGui::PlotLines(
             "",
@@ -154,8 +183,6 @@ namespace backup_gui
 
         // collect options & backup
         std::vector<std::string> commandLineArgs;
-        commandLineArgs.push_back(src_dir);
-        commandLineArgs.push_back(dst_dir);
 
         if (Job::Copy == job)
         {
@@ -185,11 +212,6 @@ namespace backup_gui
             commandLineArgs.push_back("--skip-file-read");
         }
 
-        if (opt_relative)
-        {
-            commandLineArgs.push_back("--relative");
-        }
-
         if (opt_verbose)
         {
             commandLineArgs.push_back("--verbose");
@@ -214,6 +236,9 @@ namespace backup_gui
         {
             commandLineArgs.push_back("--ignore-warnings");
         }
+
+        commandLineArgs.push_back(src_dir);
+        commandLineArgs.push_back(dst_dir);
 
         {
             std::scoped_lock lock(mutex);
