@@ -32,8 +32,6 @@ namespace backup_gui
 
     void setupOptionsWindow(Task & task)
     {
-        std::scoped_lock lock(task.mutex);
-
         ImGui::Begin("Options");
 
         if (task.is_running)
@@ -47,8 +45,8 @@ namespace backup_gui
         ImGui::SameLine();
         ImGui::RadioButton("Cull", &task.job, Job::Cull);
 
-        ImGui::InputText("SourceDir", &task.src_dir);
-        ImGui::InputText("DestDir", &task.dst_dir);
+        ImGui::InputText("Source", &task.src_dir);
+        ImGui::InputText("Destination", &task.dst_dir);
 
         ImGui::Checkbox("Dry Run", &task.opt_dryrun);
         HelpMarker("A safe mode that does nothing except show what WOULD have been done");
@@ -87,16 +85,17 @@ namespace backup_gui
         if (wasButtonClicked && !task.is_running)
         {
             task.is_running = true;
+            task.cond_var.notify_all();
         }
 
         ImGui::Text("Status:  ");
         ImGui::SameLine();
 
-        if (task.status == Status::Quit)
+        if (task.status == Status::Quitting)
         {
             ImGui::TextColored(ImVec4(1, 0, 0, 1), "Quitting");
         }
-        else if (task.status == Status::Work)
+        else if (task.status == Status::Working)
         {
             ImGui::TextColored(ImVec4(1, 1, 0, 1), "Working");
         }
@@ -110,17 +109,17 @@ namespace backup_gui
 
     void setupOutputWindow(Task & task)
     {
+        std::scoped_lock lock(task.mutex);
         ImGui::Begin("Output");
-        setupStatusBlock(task, "File Deleter", task.dir_status);
-        setupStatusBlock(task, "File Comparer", task.file_status);
-        setupStatusBlock(task, "File Copier", task.copy_status);
-        setupStatusBlock(task, "File Deleter", task.remove_status);
+        setupStatusBlock("Directory Comparer", task.dir_status);
+        setupStatusBlock("File Comparer", task.file_status);
+        setupStatusBlock("File Copier", task.copy_status);
+        setupStatusBlock("File Deleter", task.remove_status);
         ImGui::End();
     }
 
-    void setupStatusBlock(Task & task, const std::string & title, const TaskStatus & status)
+    void setupStatusBlock(const std::string & title, const TaskStatus & status)
     {
-        std::scoped_lock lock(task.mutex);
         ImGui::Text("%s", title.data(), title.size());
         ImGui::Indent();
 
@@ -146,43 +145,39 @@ namespace backup_gui
 
     void Task::backupLoop()
     {
-        while (backupOnce())
-            ;
+        while (!is_quitting)
+        {
+            backupOnce();
+        }
     }
 
-    bool Task::backupOnce()
+    void Task::backupOnce()
     {
-        // reset to be ready to backup again
+        std::unique_lock lock(mutex);
+
+        // reset states to be ready to backup again
+        status      = Status::Waitting;
+        is_running  = false;
+        is_quitting = false;
+
+        cond_var.wait(lock, [&] { return (is_running || is_quitting); });
+
+        if (is_quitting)
         {
-            std::scoped_lock lock(mutex);
-            status      = Status::Wait;
-            is_running  = false;
-            is_quitting = false;
+            status = Status::Quitting;
+            return; // unique_lock will unlock() here upon leaving scope
         }
 
-        // wait for signal to start
-        while (true)
+        if (is_running)
         {
-            {
-                std::scoped_lock lock(mutex);
-                if (is_quitting)
-                {
-                    status = Status::Quit;
-                    return false;
-                }
-                else if (is_running)
-                {
-                    status = Status::Work;
-                    file_status.reset();
-                    dir_status.reset();
-                    copy_status.reset();
-                    remove_status.reset();
-                    break;
-                }
-            }
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+            status = Status::Working;
         }
+
+        // reset all status to be ready to backup again
+        file_status.reset();
+        dir_status.reset();
+        copy_status.reset();
+        remove_status.reset();
 
         // collect options & backup
         std::vector<std::string> commandLineArgs;
@@ -248,50 +243,38 @@ namespace backup_gui
         commandLineArgs.push_back(src_dir);
         commandLineArgs.push_back(dst_dir);
 
-        {
-            std::scoped_lock lock(mutex);
-            m_toolUPtr = std::make_unique<backup::BackupTool>(commandLineArgs);
-        }
+        m_toolUPtr = std::make_unique<backup::BackupTool>(commandLineArgs);
+
+        // don't hold the lock while the backup job is running
+        lock.unlock();
 
         m_toolUPtr->run();
-
-        return true;
     }
 
     void Task::updateLoop()
     {
-        while (true)
+        while (!is_quitting)
         {
-            {
-                std::scoped_lock lock(mutex);
-
-                if (is_quitting)
-                {
-                    return;
-                }
-
-                if (is_running && m_toolUPtr.get())
-                {
-                    file_status.stats   = m_toolUPtr->fileCompareTaskerStatus();
-                    dir_status.stats    = m_toolUPtr->directoryCompareTaskerStatus();
-                    copy_status.stats   = m_toolUPtr->copyTaskerStatus();
-                    remove_status.stats = m_toolUPtr->removeTaskerStatus();
-                }
-                else
-                {
-                    file_status.stats   = backup::TaskQueueStatus();
-                    dir_status.stats    = backup::TaskQueueStatus();
-                    copy_status.stats   = backup::TaskQueueStatus();
-                    remove_status.stats = backup::TaskQueueStatus();
-                }
-
-                file_status.updateVectors();
-                dir_status.updateVectors();
-                copy_status.updateVectors();
-                remove_status.updateVectors();
-            }
-
+            updateOnce();
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+
+    void Task::updateOnce()
+    {
+        std::scoped_lock lock(mutex);
+
+        if (is_running && m_toolUPtr.get())
+        {
+            file_status.stats   = m_toolUPtr->fileCompareTaskerStatus();
+            dir_status.stats    = m_toolUPtr->directoryCompareTaskerStatus();
+            copy_status.stats   = m_toolUPtr->copyTaskerStatus();
+            remove_status.stats = m_toolUPtr->removeTaskerStatus();
+
+            file_status.updateVectors();
+            dir_status.updateVectors();
+            copy_status.updateVectors();
+            remove_status.updateVectors();
         }
     }
 

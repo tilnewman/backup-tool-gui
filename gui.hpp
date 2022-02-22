@@ -1,5 +1,6 @@
 #include "backup-tool.hpp"
 
+#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -9,9 +10,9 @@ namespace backup_gui
 {
     enum class Status
     {
-        Wait,
-        Work,
-        Quit
+        Waitting,
+        Working,
+        Quitting
     };
 
     enum Job : int
@@ -35,7 +36,8 @@ namespace backup_gui
     {
         // task states
         std::mutex mutex;
-        Status status    = Status::Wait;
+        std::condition_variable cond_var;
+        Status status    = Status::Waitting;
         bool is_running  = false;
         bool is_quitting = false;
         TaskStatus file_status;
@@ -61,13 +63,14 @@ namespace backup_gui
         std::unique_ptr<backup::BackupTool> m_toolUPtr;
 
         void backupLoop();
-        bool backupOnce();
+        void backupOnce();
 
         void updateLoop();
+        void updateOnce();
     };
 
     void setupGUI(Task & task);
     void setupOptionsWindow(Task & task);
     void setupOutputWindow(Task & task);
-    void setupStatusBlock(Task & task, const std::string & title, const TaskStatus & status);
+    void setupStatusBlock(const std::string & title, const TaskStatus & status);
 } // namespace backup_gui

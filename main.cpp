@@ -103,6 +103,7 @@ int main(int, char **)
 
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
+    // start all threads
     backup_gui::Task task;
     auto backupFuture = std::async(std::launch::async, &backup_gui::Task::backupLoop, &task);
     auto updateFuture = std::async(std::launch::async, &backup_gui::Task::updateLoop, &task);
@@ -147,10 +148,13 @@ int main(int, char **)
         glfwSwapBuffers(window);
     }
 
+    // stop and join all threads
     {
         std::scoped_lock lock(task.mutex);
         task.is_quitting = true;
     }
+
+    task.cond_var.notify_all();
 
     updateFuture.wait();
     backupFuture.wait();
